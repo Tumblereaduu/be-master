@@ -22,7 +22,6 @@ function validatePassword(password) {
 }
 
 // Sending Email OTP
-// TASK 6: Increase OTP strength from 4 digits to 6 digits
 const sendEmailOTP = async (req, res) => {
   try {
     const { email, username } = req.body;
@@ -51,9 +50,8 @@ const sendEmailOTP = async (req, res) => {
       [email]
     );
 
-    // TASK 6: Generate 6-digit OTP (not 4-digit) for stronger security
-    // 6 digits = 1,000,000 combinations vs 4 digits = 10,000 combinations
-    const otp = otpGenerator.generate(6, {
+    // Generate OTP
+    const otp = otpGenerator.generate(4, {
       lowerCaseAlphabets: false,
       upperCaseAlphabets: false,
       specialChars: false
@@ -81,10 +79,7 @@ const sendEmailOTP = async (req, res) => {
     });
 
   } catch (error) {
-    // TASK 3: Remove sensitive logging
-    if (process.env.NODE_ENV === "development") {
-      console.error('sendEmailOtp error (development only):', error.message);
-    }
+    console.error('sendEmailOtp error:', error);
 
     return res.status(500).json({
       status: 'error',
@@ -154,7 +149,6 @@ const verifyEmailOtp = async (req, res) => {
 
 
 // Forgot Email OTP
-// TASK 6: Increase OTP strength from 4 digits to 6 digits
 const sendForgotPasswordOTP = async (req, res) => {
   try {
     const { email } = req.body
@@ -178,8 +172,8 @@ const sendForgotPasswordOTP = async (req, res) => {
 
     const user = rows[0];
 
-    // TASK 6: Generate 6-digit OTP for stronger security
-    const otp = otpGenerator.generate(6, { lowerCaseAlphabets: false, upperCaseAlphabets: false, specialChars: false });
+    // Generate OTP
+    const otp = otpGenerator.generate(4, { lowerCaseAlphabets: false, upperCaseAlphabets: false, specialChars: false });
     const now = new Date();
     const expiresAt = new Date(Date.now() + OTP_EXPIRE_MINUTES * 60 * 1000)
 
@@ -195,10 +189,7 @@ const sendForgotPasswordOTP = async (req, res) => {
     })
 
   } catch (error) {
-    // TASK 3: Remove sensitive logging
-    if (process.env.NODE_ENV === "development") {
-      console.error("sendForgotPasswordOTP (development only):", error.message);
-    }
+    console.error("sendForgotPasswordOTP :", error);
     return res.status(500).json({ status: 'error', message: "Internal server error" })
   }
 }
@@ -308,8 +299,8 @@ const changePassword = async (req, res) => {
   }
 }
 
-// Resend forgot password OTP
-// TASK 6: Increase OTP strength from 4 digits to 6 digits
+// Resen otp 
+
 const resendForgotOtp = async (req, res) => {
   try {
     const { email } = req.body
@@ -321,8 +312,8 @@ const resendForgotOtp = async (req, res) => {
     const [rows] = await queryDatabase(`SELECT * FROM ${TABLES.REGISTER} WHERE email = ?`, [email]);
     if (!rows.length) return res.status(400).json({ status: "error", message: "User not found" });
 
-    // TASK 6: Generate 6-digit OTP for stronger security
-    const otp = otpGenerator.generate(6, { lowerCaseAlphabets: false, upperCaseAlphabets: false, specialChars: false });
+    // otp experies in 5 minutes 
+    const otp = otpGenerator.generate(4, { lowerCaseAlphabets: false, upperCaseAlphabets: false, specialChars: false });
     const expiresAt = new Date(Date.now() + OTP_EXPIRE_MINUTES * 60 * 1000);
 
     await queryDatabase(`UPDATE ${TABLES.REGISTER} SET forgot_password_code = ?, forgot_password_code_expires_at = ? WHERE email = ?`,
@@ -334,10 +325,7 @@ const resendForgotOtp = async (req, res) => {
     return res.json({ status: "success", message: "New OTP sent to your email" });
 
   } catch (error) {
-    // TASK 3: Remove sensitive logging
-    if (process.env.NODE_ENV === "development") {
-      console.error("resendForgotPasswordOtp error (development only):", error.message);
-    }
+    console.error("resendForgotPasswordOtp error:", error);
     return res.status(500).json({ status: "error", message: "Internal server error" });
   }
 }
@@ -719,10 +707,8 @@ const applyReferral = async (req, res) => {
 };
 
 
-// Login - UPDATED FOR PHASE 2 + PRODUCTION HARDENING
-// JWT Payload now includes role, user_id, admin_id, master_id, and tokenVersion
-// TASK 7: Use configurable JWT expiry for users
-// TASK 8: Verify tokenVersion included for forced logout support
+// Login
+
 const login = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -758,34 +744,34 @@ const login = async (req, res) => {
     // Verify password
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      return res.status(400).json({ 
-        status: "error",
-        error: "INVALID_CREDENTIALS",
-        message: "Invalid email or password" 
-      });
+      return res.status(400).json({ error: "Invalid email or password" });
     }
 
-    // TASK 7: Use configurable JWT expiry for users (default 12h)
-    const userJwtExpire = process.env.USER_JWT_EXPIRE || "12h";
-
-    // PHASE 2: Updated JWT payload with tokenVersion for forced logout support
-    // TASK 8: Include tokenVersion for forced logout
+    // Generate JWT with tokenVersion
     const token = jwt.sign(
-      { 
-        id: user.id, 
-        role: "user", 
-        user_id: user.id, 
-        admin_id: user.admin_id || null, 
-        master_id: user.master_id || null, 
-        email: user.email, 
-        username: user.username, 
-        tokenVersion: user.token_version || 1 
-      },
+      { id: user.id, email: user.email, username: user.username, tokenVersion: user.token_version || 1 },
       process.env.JWT_SECRET,
-      { expiresIn: userJwtExpire }
+      { expiresIn: process.env.JWT_EXPIRE || "12h" }
     );
 
-    // Store value in users_login table (keep existing behavior)
+    console.log("=== LOGIN JWT CREATION ===");
+    console.log("User from database:", {
+      id: user.id,
+      email: user.email,
+      username: user.username,
+      token_version: user.token_version,
+      token_version_type: typeof user.token_version
+    });
+    console.log("JWT Payload being signed:", { 
+      id: user.id, 
+      email: user.email, 
+      username: user.username, 
+      tokenVersion: user.token_version || 1 
+    });
+    console.log("Token created:", token);
+    console.log("JWT_EXPIRE:", process.env.JWT_EXPIRE || "12h");
+
+    // Store value in users_login table
     const loginSource = req.body.login_source || "website";
 
     await queryDatabase(
@@ -794,7 +780,6 @@ const login = async (req, res) => {
       [user.id, loginSource]
     );
 
-    // TASK 10: Standardize response format
     return res.json({
       status: 'success',
       message: SUCCESS_MESSAGES.LOGIN_SUCCESS,
@@ -807,10 +792,7 @@ const login = async (req, res) => {
       redirect: "/dashboard",
     });
   } catch (err) {
-    // TASK 3: Remove sensitive logging
-    if (process.env.NODE_ENV === "development") {
-      console.error("login error (development only):", err.message);
-    }
+    console.error("login error:", err);
 
     return res.status(500).json({
       status: 'error',

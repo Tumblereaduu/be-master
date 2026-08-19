@@ -152,6 +152,7 @@ if (userSpreadRows && userSpreadRows.length > 0) {
 const spreadInPrice = getSpreadInPrice(symbol, spreadPips);
 console.log(`[Spread Applied] symbol=${symbol}, type=${type}, mid=${currentPrice}, spread_pips=${spreadPips}, spread_in_price=${spreadInPrice}, entry=${type.toUpperCase() === 'BUY' ? currentPrice + spreadInPrice : currentPrice - spreadInPrice}`);
 
+
     // Validate TP/SL against current market price
     if (take_profit !== undefined && take_profit !== null && take_profit !== '') {
       const tpNum = parseFloat(take_profit);
