@@ -34,11 +34,39 @@ async function loadSpreadValuesFromDB() {
 
 
 function getSpread(symbol) {
-  // Normalize symbol format
-  const normalizedSymbol = symbol.toUpperCase();
-  console.log(`Getting spread for: ${normalizedSymbol}`);
-  console.log("Current SPREAD_VALUES:", SPREAD_VALUES);
-  return SPREAD_VALUES[normalizedSymbol] || 3; // default to 300 pips if not found
+    // Validate and normalize symbol
+    let normalizedSymbol = null;
+
+    if (typeof symbol === "string") {
+        normalizedSymbol = symbol.trim().toUpperCase();
+    } else if (symbol && typeof symbol === "object") {
+        // Handle cases where the whole trade/instrument object is passed
+        const rawSymbol =
+            symbol.symbol ??
+            symbol.Symbol ??
+            symbol.instrument ??
+            symbol.instrument_symbol;
+
+        if (typeof rawSymbol === "string") {
+            normalizedSymbol = rawSymbol.trim().toUpperCase();
+        }
+    }
+
+    // Prevent invalid symbol from reaching SPREAD_VALUES
+    if (!normalizedSymbol) {
+        console.error("[getSpread] Invalid symbol received:", {
+            symbol,
+            type: typeof symbol,
+            isArray: Array.isArray(symbol),
+        });
+
+        return 3;
+    }
+
+    console.log(`Getting spread for: ${normalizedSymbol}`);
+    console.log("Current SPREAD_VALUES:", SPREAD_VALUES);
+
+    return SPREAD_VALUES[normalizedSymbol] ?? 3;
 }
 
 // Get spread in decimal (price units)

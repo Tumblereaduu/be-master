@@ -319,7 +319,7 @@ const demoCheckAndAutoSquareOff = async (symbol) =>{
     }
 
   } catch (error) {
-    console.error(`Error in demoCheckAutoSquareoff`, err)
+    console.error(`Error in demoCheckAutoSquareoff`, error)
   }
 } 
 
@@ -593,8 +593,16 @@ function init1ForgeSocketConn(serverIO, apiKey) {
     io.emit('forex_update', priceObj);
 
     // Auto square-off logic
-    await checkAndAutoSquareOff(priceObj.symbol);
-    await demoCheckAndAutoSquareOff(priceObj.symbol);
+    // await checkAndAutoSquareOff(priceObj.symbol);
+    // await demoCheckAndAutoSquareOff(priceObj.symbol);
+    // ✅ WRAP DB CALLS IN TRY-CATCH - Don't let DB errors kill the socket
+    try {
+        await checkAndAutoSquareOff(priceObj.symbol);
+        await demoCheckAndAutoSquareOff(priceObj.symbol);
+    } catch (err) {
+        console.error('❌ Auto square-off check failed (price still updating):', err.message);
+        // DON'T throw - let price updates continue!
+    }
   };
 
   // ❌ DISCONNECT

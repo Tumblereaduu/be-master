@@ -25,16 +25,7 @@
 
 
 const jwt = require("jsonwebtoken");
-const { queryDatabase } = require("./db");
-
-// ============================================================================
-// VERIFY TOKEN MIDDLEWARE - SUPPORTS MASTER, ADMIN, AND USER ROLES
-// ============================================================================
-// Validates JWT token and checks token_version from database
-// Supports role hierarchy: Master > Admin > User
-// Rejects token if token_version doesn't match (forced logout)
-// TASK 3: Removed all sensitive logging (no JWT, password, token_version, or sensitive data logging)
-// TASK 8: Verify token_version continues to work for forced logout
+const { queryDatabase } = require("./db"); // Update path if needed
 
 const verifyToken = async (req, res, next) => {
     const authHeader = req.headers["authorization"];
@@ -56,82 +47,51 @@ const verifyToken = async (req, res, next) => {
     }
 
     try {
-        // Verify JWT signature
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-        // Determine role and fetch token_version from appropriate table
-        let tokenVersionFromDb;
-        let dbQuery;
+        console.log("=== verifyToken.js DEBUG ===");
+        console.log("Decoded JWT:", JSON.stringify(decoded, null, 2));
+        console.log("JWT tokenVersion:", decoded.tokenVersion);
+        console.log("JWT tokenVersion type:", typeof decoded.tokenVersion);
 
-        if (decoded.role === "master") {
-            // Master admin - fetch from master_admin table
-            dbQuery = `SELECT token_version FROM master_admin WHERE id = ?`;
-        } else if (decoded.role === "admin") {
-            // Admin - fetch from admins table
-            dbQuery = `SELECT token_version FROM admins WHERE id = ?`;
-        } else if (decoded.role === "user") {
-            // User - fetch from users table
-            dbQuery = `SELECT token_version FROM users WHERE id = ?`;
-        } else {
-            // Unknown role
-            return res.status(401).json({
-                status: "error",
-                message: "Invalid token role",
-            });
-        }
+        // Check latest token version from database
+        const [rows] = await queryDatabase(
+            "SELECT token_version FROM users WHERE id = ?",
+            [decoded.id]
+        );
 
-        // Query database
-        const [rows] = await queryDatabase(dbQuery, [decoded.id]);
+        console.log("Database query result:", JSON.stringify(rows, null, 2));
+        console.log("DB token_version:", rows?.[0]?.token_version);
+        console.log("DB token_version type:", typeof rows?.[0]?.token_version);
 
         if (!rows || rows.length === 0) {
+            console.log("❌ User not found in database");
             return res.status(401).json({
                 status: "error",
                 message: "User not found",
             });
         }
 
-        tokenVersionFromDb = rows[0].token_version;
+        // If admin has forced logout
+        const jwtVersion = decoded.tokenVersion;
+        const dbVersion = rows[0].token_version;
+        
+        console.log("Comparison: JWT tokenVersion (" + jwtVersion + ") !== DB token_version (" + dbVersion + ") ?");
+        console.log("Result of comparison:", jwtVersion !== dbVersion);
 
-        // Validate token_version matches
-        // If JWT tokenVersion doesn't match DB tokenVersion, token has been invalidated
-        // TASK 8: This ensures forced logout works (password change, status change, etc.)
-        const jwtTokenVersion = decoded.tokenVersion || 1;
-        const dbTokenVersion = tokenVersionFromDb || 1;
-
-        if (jwtTokenVersion !== dbTokenVersion) {
+        if (jwtVersion !== dbVersion) {
+            console.log("❌ Token version mismatch - rejecting token");
             return res.status(401).json({
                 status: "error",
                 message: "Session expired, Kindly login to continue",
             });
         }
 
-        // Token is valid - store decoded info in req.user
-        // Structure req.user based on role for consistency
-        req.user = {
-            id: decoded.id,
-            role: decoded.role,
-            email: decoded.email
-        };
-
-        // Add role-specific fields
-        if (decoded.role === "master") {
-            req.user.master_id = decoded.master_id;
-        } else if (decoded.role === "admin") {
-            req.user.admin_id = decoded.admin_id;
-            req.user.master_id = decoded.master_id;
-        } else if (decoded.role === "user") {
-            req.user.user_id = decoded.user_id;
-            req.user.admin_id = decoded.admin_id;
-            req.user.master_id = decoded.master_id;
-            req.user.username = decoded.username;
-        }
-
+        console.log("✅ Token verification passed");
+        req.user = decoded;
         next();
     } catch (err) {
-        // TASK 3: Remove sensitive logging - only log generic error message in production
-        if (process.env.NODE_ENV === "development") {
-            console.error("JWT verification error (development only):", err.message);
-        }
+        console.log("❌ JWT verification error:", err.message);
         return res.status(403).json({
             status: "error",
             message: "Session expired, Kindly login to continue",
